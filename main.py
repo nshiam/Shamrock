@@ -151,6 +151,7 @@ if __name__=="__main__":
     parser.add_argument("-FILE_PATH")
     parser.add_argument("--NCORES", help="Set number of cores to use")
     parser.add_argument("--START", help="Set number of cores to use")
+    parser.add_argument("--ZERO_POINT", help="Set zero point :)")
     
     args = parser.parse_args() 
 

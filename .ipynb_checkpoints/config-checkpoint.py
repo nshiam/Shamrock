@@ -6,3 +6,5 @@ class ShamrockConfig():
     NCORES = 5
     START = 0
     END = 100
+
+    ZERO_POINT = 31.4
