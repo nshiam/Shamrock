@@ -7,8 +7,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 
 
-
-
+import time
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt 
@@ -26,15 +25,14 @@ from sncosmo.fitting import DataQualityError
 from glob import glob
 import sys
 import multiprocess
-multiprocess.set_start_method("fork", force=True)
 
 
 
-def load_snana_directory(path_sim):
+def load_snana_directory(config):
 
-
-    head_files = sorted(glob(os.path.join(path_sim, "*_HEAD.FITS.gz")))
-    phot_files = sorted(glob(os.path.join(path_sim, "*_PHOT.FITS.gz")))
+    path = config.FILE_PATH
+    head_files = sorted(glob(os.path.join(path, "*_HEAD.FITS.gz")))
+    phot_files = sorted(glob(os.path.join(path, "*_PHOT.FITS.gz")))
 
     if len(head_files) == 0 or len(phot_files) == 0:
         raise ValueError("No HEAD or PHOT files found.")
@@ -80,15 +78,20 @@ def load_snana_directory(path_sim):
         )
 
         
-        data_p.append(table_sncosmo(df_phot))
+        data_p.append(table_sncosmo(config, df_phot))
+
+    print('FILES ARE FINE')
 
     return data_h, data_p
 
 
 
-def run_id_function(file_id, start, end, data_h=None):
+def run_id_function(config, data_h=None):
 
-    if file_id == 'NONE':
+    file_id = config.ID_FILE
+    start =  config.START
+    end = config.END
+    if file_id == None:
 
         if data_h is None or len(data_h) == 0:
             raise ValueError("data_h is empty or not provided.")
@@ -162,7 +165,7 @@ def estimates_griz_riz(griz, riz):
 
 #function that takes as input the photo data i.e. the data_p1,2,3,4,5 and converts it to the astropy table format. 
 #Should run it once for each data_p_ and then only use that sncosmo table.
-def table_sncosmo(data_phot):
+def table_sncosmo(config, data_phot):
     # make a astropy table to fit the light curves, we need time, band, flux, flux error, zero point, mag system 
     selected_columns = data_phot[['MJD', 'BAND' , 'FLUXCAL', 'FLUXCALERR', 'PHOTFLAG']]
     # Rename the columns 
@@ -178,13 +181,15 @@ def table_sncosmo(data_phot):
     astropy_table['band'][astropy_table['band'] == 'z'] = 'desz'
     astropy_table['band'] = astropy_table['band'].astype(str)
     astropy_table['magsys'] = 'ab'
-    astropy_table['zp'] = ZP
+    astropy_table['zp'] = config.ZERO_POINT
     
     return astropy_table
 
 
 #magnitude function to compute theoretical and observed magnitude for each redshift interval
-def mag_comp(z, x0,x1,c, M_trial = -19.35, a=alpha_cosmo, b =beta_cosmo, H_0=70, omega_m=0.3):
+def mag_comp(config, z, x0,x1,c, M_trial = -19.35, H_0=70, omega_m=0.3):
+    a=config.ALPHA_COSMO
+    b=config.BETA_COSMO
     offset = 10.635
     cosmo = FlatLambdaCDM(H0=H_0, Om0= omega_m)
     m_theory = cosmo.distmod(z).value + M_trial
@@ -240,11 +245,13 @@ def check_systematic(z_photo, prec):
     return check
     
 
-def zbins_estimates2(fit_table, SNID, z_min , z_max , dz_width = 0.1, number_of_floating = 2):
+def zbins_estimates2(config, fit_table, SNID, z_min , z_max , dz_width = 0.1, number_of_floating = 2):
     bound = np.round(np.arange(z_min, z_max + dz_width, dz_width), number_of_floating )
     z =[] ; x1=[]; c=[] ; chisqr = []; dof=[] ; x0 = []
+    # salt_model = 'salt3'
+    salt_model = sncosmo.SALT3Source(modeldir='SALT3.DOVEKIE/')
     model = sncosmo.Model(source=salt_model)
-    if not np.any(fit_table['flux'] / fit_table['fluxerr'] > SNR):
+    if not np.any(fit_table['flux'] / fit_table['fluxerr'] > config.SNR):
         if not np.any(fit_table['flux'] / fit_table['fluxerr'] > 3):  
             fail = (SNID,
                     np.array([1e8] * (len(bound)-1)),  # chisqr
@@ -263,7 +270,7 @@ def zbins_estimates2(fit_table, SNID, z_min , z_max , dz_width = 0.1, number_of_
                 
                 # Attempt to fit the light curve
                 r, fm = sncosmo.fit_lc(fit_table, model, ['z', 't0', 'x0', 'x1', 'c'] ,
-                                       bounds={'z': (bound[i], bound[i + 1]), 'x1':(-5,5), 'c': (-0.5,0.5),'x0': (0.0,0.1) }, minsnr = SNR)
+                                       bounds={'z': (bound[i], bound[i + 1]), 'x1':(-5,5), 'c': (-0.5,0.5),'x0': (0.0,0.1) }, minsnr = config.SNR)
                 # No warnings, so append results
                 z.append(r.parameters[0]) ; x0.append(r.parameters[2])
                 x1.append(r.parameters[3]) ; c.append(r.parameters[4]) 
@@ -280,13 +287,13 @@ def zbins_estimates2(fit_table, SNID, z_min , z_max , dz_width = 0.1, number_of_
     return SNID, chisqr, z, x0, x1, c, dof
 
 # function to identify the ids to use 
-def lc_fitting_step1_2(data_head, table_for_sncosmo, SNID, bands, z_min , z_max, dz_width):
+def lc_fitting_step1_2(config, data_head, table_for_sncosmo, SNID, bands, z_min , z_max, dz_width):
     id = np.where(data_head['SNID'].str.strip()== SNID)[0]  #SNID must be a string
     if len(id) > 0:
         id=id[0]
         min_phot , max_phot = data_head['PTROBS_MIN'][id], data_head['PTROBS_MAX'][id]
         fit_table = table_for_sncosmo[min_phot-1:max_phot] #maybe it should be min_phot -1
-        if PHOTFLAG == 'TRUE':
+        if config.PHOTFLAG == True:
             fit_table = flagged_photometry(fit_table) #!!!
         fit_table.remove_column('PHOTFLAG') #!!!
         if len(fit_table) > 10:
@@ -298,16 +305,16 @@ def lc_fitting_step1_2(data_head, table_for_sncosmo, SNID, bands, z_min , z_max,
         if bands == 'riz':
             fit_table  = fit_table[fit_table['band'] != 'desg']
         
-        zbins_es = zbins_estimates2(fit_table, SNID, z_min, z_max, dz_width)
+        zbins_es = zbins_estimates2(config, fit_table, SNID, z_min, z_max, dz_width)
         return  zbins_es
     return  None
 
 #simple loop to run using the lc_fitting_step1
-def run_es2(idd, data_h, table_p, bands, z_min , z_max, dz_width):   
+def run_es2(config, idd, data_h, table_p, bands, z_min , z_max, dz_width):   
     id_yr1 = idd
     zbins_es =[]
     for i in id_yr1:
-        zbins_ess = lc_fitting_step1_2(data_h, table_p, i, bands, z_min , z_max, dz_width)
+        zbins_ess = lc_fitting_step1_2(config, data_h, table_p, i, bands, z_min , z_max, dz_width)
         if zbins_ess is not None:  # Check if the result is valid
             zbins_es.append(zbins_ess)
     return zbins_es
@@ -316,7 +323,7 @@ def run_es2(idd, data_h, table_p, bands, z_min , z_max, dz_width):
 
 
 # CHANGE VALUES TO CHANGE PRIORS: x1, c, and Delta_m. 
-def loop_for_fitting(zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min):
+def loop_for_fitting(config, zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min):
     SNID = zbins_es[0] ; chisqr = zbins_es[1] ; chisqr = np.array(chisqr) 
     z = zbins_es[2]   ; z = np.array(z)  
     x0 = zbins_es[3] ; x0 = np.array(x0)
@@ -328,7 +335,7 @@ def loop_for_fitting(zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min):
     z_initial = z
     while True:
         index = np.argmin(min_cond)
-        m_th , m_int = mag_comp(z[index], x0[index],x1[index],c[index], M_trial = -19.35, a=alpha_cosmo, b = beta_cosmo, H_0=70, omega_m=0.3)
+        m_th , m_int = mag_comp(config, z[index], x0[index],x1[index],c[index], M_trial = -19.35, H_0=70, omega_m=0.3)
         m_th = np.array(m_th) ; m_int = np.array(m_int)
         check = check_systematic(z[index], 3)
         if ((z[index] > z_min + 0.05) and (z[index] < z_max - 0.0001 ) and (x1[index] > x1_l) and (x1[index] < x1_u) and (c[index] > c_l) and (c[index] < c_u)  
@@ -363,17 +370,17 @@ def loop_for_fitting(zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min):
     
 
 #step 2 simply run the fitting for a single value!
-def lc_fitting_step2(zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min):
+def lc_fitting_step2(config, zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min):
     if zbins_es is not None:
-        SNID, z_b, = loop_for_fitting(zbins_es,x1_l, x1_u, c_l, c_u, m_d, z_max, z_min)
+        SNID, z_b, = loop_for_fitting(config, zbins_es,x1_l, x1_u, c_l, c_u, m_d, z_max, z_min)
         return SNID, z_b
 
 # run loop for all ids that you want
-def run_fit(zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min): 
+def run_fit(config, zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min): 
     z_t = []  
     id = []
     for i in range(len(zbins_es)):
-        ssnid, z_b  = lc_fitting_step2(zbins_es[i],x1_l, x1_u, c_l, c_u, m_d, z_max, z_min)
+        ssnid, z_b  = lc_fitting_step2(config, zbins_es[i],x1_l, x1_u, c_l, c_u, m_d, z_max, z_min)
         if z_b is not None:  # Check if the result is valid
             z_t.append(z_b)
             id.append(ssnid)
@@ -384,8 +391,10 @@ def run_fit(zbins_es, x1_l, x1_u, c_l, c_u, m_d, z_max, z_min):
 
 
 
-def chi2_estimate(fit_table, SNID, photo_z, type_z):
+def chi2_estimate(config, fit_table, SNID, photo_z, type_z):
     z =[] ; z_err=[]; t0 =[] ; t0_err =[] ; x0=[] ; x0_err=[]; x1=[]; x1_err=[]; c=[] ; c_err=[] ;  chisqr = []; dof=[]
+    # salt_model = 'salt3'
+    salt_model = sncosmo.SALT3Source(modeldir='SALT3.DOVEKIE/')
     model = sncosmo.Model(source=salt_model)
     fit_success = False  
     if type_z == 'PHOTOZ':
@@ -395,7 +404,7 @@ def chi2_estimate(fit_table, SNID, photo_z, type_z):
         z_lower, z_upper = photo_z - z_add[0], photo_z + z_add[1]
         try:
             r, f_m = sncosmo.fit_lc(fit_table, model,['z', 't0', 'x0', 'x1', 'c'], 
-                                    bounds={'z': (z_lower, z_upper), 'x1':(-5,5), 'c': (-0.5,0.5), 'x0': (0.0,0.1)}, minsnr=SNR)
+                                    bounds={'z': (z_lower, z_upper), 'x1':(-5,5), 'c': (-0.5,0.5), 'x0': (0.0,0.1)}, minsnr=config.SNR)
             fit_success = True
             break
         except Exception:
@@ -420,25 +429,25 @@ def chi2_estimate(fit_table, SNID, photo_z, type_z):
 
 
 # function to identify the ids to use 
-def lc_chi2_step1_2(data_head, table_for_sncosmo, SNID, photo_z, type_z):
+def lc_chi2_step1_2(config, data_head, table_for_sncosmo, SNID, photo_z, type_z):
     id = np.where(data_head['SNID'].str.strip()== SNID)[0]  #SNID must be a string
     if len(id) > 0:
         id=id[0]
         min_phot , max_phot = data_head['PTROBS_MIN'][id], data_head['PTROBS_MAX'][id]
         fit_table = table_for_sncosmo[min_phot-1:max_phot]
-        if PHOTFLAG == 'TRUE':
+        if config.PHOTFLAG == True:
             fit_table = flagged_photometry(fit_table) #!!!
         fit_table.remove_column('PHOTFLAG') #!!!
         if len(fit_table['mjd']) > 10 :
             fit_table  = fit_table[fit_table['mjd']  < (fit_table['mjd'][10] +200) ]
-            zbins_es = chi2_estimate(fit_table, SNID, photo_z, type_z)
+            zbins_es = chi2_estimate(config, fit_table, SNID, photo_z, type_z)
         else: 
             zbins_es= None
         return  zbins_es
     return  None
 
 #simple loop to run using the lc_fitting_step1
-def run_chi2_es(data, data_h, table_p, type_z = 'PHOTOZ'):   
+def run_chi2_es(config, data, data_h, table_p, type_z = 'PHOTOZ'):   
     id = np.array(id_function(data))
     if type_z == 'PHOTOZ':
         photo_z = np.array(data['photoz'])
@@ -446,7 +455,7 @@ def run_chi2_es(data, data_h, table_p, type_z = 'PHOTOZ'):
         photo_z = np.array(data['zHEL'])
     zbins_es =[]
     for i in range(len(id)):
-        zbins_ess = lc_chi2_step1_2(data_h, table_p, id[i] , photo_z[i], type_z)
+        zbins_ess = lc_chi2_step1_2(config, data_h, table_p, id[i] , photo_z[i], type_z)
         if zbins_ess is not None:  # Check if the result is valid
             zbins_es.append(zbins_ess)
     return zbins_es
@@ -474,12 +483,21 @@ def make_table_photoz_pickle(pickle):
 
 
 
-def run_shiamrock(proc_id, data_h, table_p, idd, z_griz_min, z_griz_max, z_riz_min, z_riz_max, dz_width):
+def run_shiamrock(config, proc_id, data_h, table_p, idd):
+
+    z_griz_min, z_griz_max = config.GRIZ_MIN, config.GRIZ_MAX 
+    z_riz_min, z_riz_max = config.RIZ_MIN, config.RIZ_MAX 
+    dz_width = config.ZBIN_WIDTH
+    run_dir = config.RUN_DIR
+    SNR = config.SNR
+    start, end = config.START, config.END
+    
+  
     print(f'Process {proc_id} running with IDs: {idd}...')
     
     griz = []
     for dh, tp in zip(data_h, table_p):
-        griz += run_es2(idd, dh, tp,
+        griz += run_es2(config, idd, dh, tp,
                         bands='griz',
                         z_min= z_griz_min,
                         z_max= z_griz_max, dz_width = dz_width)
@@ -493,7 +511,7 @@ def run_shiamrock(proc_id, data_h, table_p, idd, z_griz_min, z_griz_max, z_riz_m
     
     riz = []
     for dh, tp in zip(data_h, table_p):
-        riz += run_es2(idd, dh, tp,
+        riz += run_es2(config, idd, dh, tp,
                         bands='riz',
                         z_min= z_riz_min,
                         z_max= z_riz_max  , dz_width = dz_width)  
@@ -506,10 +524,14 @@ def run_shiamrock(proc_id, data_h, table_p, idd, z_griz_min, z_griz_max, z_riz_m
     with open(filename_riz, 'wb') as f:
         pickle.dump(riz, f)
     
+
+    x1_l, x1_u = config.X1_LOWER, config.X1_UPPER
+    c_l, c_u = config.C_LOWER, config.C_UPPER
+    m_d = config.DELTA_MAG
+  
+    z_griz = run_fit(config, griz, x1_l, x1_u, c_l, c_u, m_d, z_griz_max, z_griz_min)
     
-    z_griz = run_fit(griz, x1_l, x1_u, c_l, c_u, m_d, z_griz_max, z_griz_min)
-    
-    z_riz = run_fit(riz, x1_l, x1_u, c_l, c_u, m_d, z_riz_max, z_riz_min)
+    z_riz = run_fit(config, riz, x1_l, x1_u, c_l, c_u, m_d, z_riz_max, z_riz_min)
     
     dd = estimates_griz_riz(z_griz, z_riz)
     
@@ -518,7 +540,7 @@ def run_shiamrock(proc_id, data_h, table_p, idd, z_griz_min, z_griz_max, z_riz_m
     dd = dd[dd['photoz'] >0 ]
     est = []
     for dh, tp in zip(data_h, table_p):
-        est += run_chi2_es(dd, dh, tp, type_z)
+        est += run_chi2_es(config, dd, dh, tp, config.TYPE_Z)
 
     df = make_table_photoz_pickle(est).to_pandas()
     #save it here too.
