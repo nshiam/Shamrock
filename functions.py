@@ -80,7 +80,6 @@ def load_snana_directory(config):
         
         data_p.append(table_sncosmo(config, df_phot))
 
-    print('FILES ARE FINE')
 
     return data_h, data_p
 

@@ -30,6 +30,9 @@ from glob import glob
 import sys
 import multiprocess
 
+warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings("ignore", message="Dropping following bands from data:.*", category=RuntimeWarning)
+
 
 def str_to_bool(value):
     if value.lower() not in ("true", "false"):
@@ -42,15 +45,27 @@ def run(config):
     multiprocess.set_start_method("fork", force=True)
   
     start_clock = time.perf_counter()
+    print()
+    print('--- Reading the Light Curve files ---')
     data_h, table_p = functions.load_snana_directory(config)
     total = pd.concat(data_h, ignore_index=True)
+  
+    print()
+    print('--- Light Cruve files are fine ---')
 
     if config.END == None:
         config.END = len(total)
     idd = functions.run_id_function(config, data_h=data_h)
 
+    print()
+    print('--- IDs are selected ---')
+
     
-    if config.PICKLE_FILES == False: 
+    if config.PICKLE_FILES == False:
+        print()
+        print('--- Shamrock implemented - Approx. Time:', 
+              11 * config.END / config.NCORES ,' seconds or ', f"{12 * config.END / (config.NCORES * 60):.2f}"  ,' minutes ---')
+        print()
         split_ids = list(functions.split_paths(list(idd), config.NCORES))
         jobs, proc_ids = [], []
         for proc_id in range(config.NCORES):
@@ -215,7 +230,7 @@ parser.add_argument("--PICKLE_FILES", type=str_to_bool,
                     default=ShamrockConfig.PICKLE_FILES, help="Whether to use pre-computed pickle files (True or False)")
 
 # WILL DELETE THESE
-parser.add_argument("--SAVE_FILE", type=str, default=None, help="Directory to results")
+parser.add_argument("--SAVE_FILE", type=str, default=None, help="Starting name")
 parser.add_argument("--RUN_DIR", type=str, default=ShamrockConfig.FILE_PATH, help="Current running directory")
 parser.add_argument("--TYPE_Z", type=str, default=ShamrockConfig.TYPE_Z, help="Dummy" )
 
@@ -232,7 +247,9 @@ if __name__=="__main__":
         args.SAVE_FILE = os.path.basename(os.path.normpath(args.FILE_PATH))  
 
     config = ShamrockConfig()
-  
+    print()
+    print('--- The Configuration that is being used is: ---')
+    print()
     for arg_name, arg_value in vars(args).items():
         print(arg_name, arg_value)
 
