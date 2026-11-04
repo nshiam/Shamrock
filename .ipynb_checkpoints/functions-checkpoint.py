@@ -162,8 +162,6 @@ def estimates_griz_riz(griz, riz):
 
 
 
-#function that takes as input the photo data i.e. the data_p1,2,3,4,5 and converts it to the astropy table format. 
-#Should run it once for each data_p_ and then only use that sncosmo table.
 def table_sncosmo(config, data_phot):
     # make a astropy table to fit the light curves, we need time, band, flux, flux error, zero point, mag system 
     selected_columns = data_phot[['MJD', 'BAND' , 'FLUXCAL', 'FLUXCALERR', 'PHOTFLAG']]
@@ -199,10 +197,8 @@ def mag_comp(config, z, x0,x1,c, M_trial = -19.35, H_0=70, omega_m=0.3):
 
 #quick function that locates the SNIDs of the SN that we are interested in
 def id_function(data_p):
-    #get the ids of the spectro-z as str
+    #get the ids of the SNe as str
     idd = data_p['SNID'].astype(str)
-    idd = idd[ idd != 'nan'] 
-    idd = idd.astype(float) ; idd = idd.astype(int) ; idd = idd.astype(str)
     return idd
 
 

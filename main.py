@@ -32,6 +32,7 @@ import multiprocess
 
 warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
 warnings.filterwarnings("ignore", message="Dropping following bands from data:.*", category=RuntimeWarning)
+warnings.filterwarnings("ignore")
 
 
 def str_to_bool(value):
