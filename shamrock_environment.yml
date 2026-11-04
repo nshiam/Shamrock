@@ -554,4 +554,3 @@ dependencies:
       - virtualenv==20.28.0
       - wheel==0.45.1
       - wsproto==1.2.0
-prefix: /media/data1/nikolaos/anaconda
