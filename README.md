@@ -2,20 +2,14 @@
 
 ## Description
 
-Shamrock is a [briefly describe the purpose of your project and what the code does].
+Shamrock is a Photometric Redshift Estimator for Type Ia Supernova Light-Curves designed for the Dark Energy Survey and later for the Rubin Legacy Survey of Space and Time. 
 
-This project provides tools and functionality for [describe the main functionality, application, or research objective]. It is written in [Python / other language] and uses a Conda environment to manage its dependencies.
-
-### Key Features
-- [Feature 1]
-- [Feature 2]
-- [Feature 3]
 
 ## Installation
-
+Shamrock can be installed by following the next steps. 
 ### 1. Clone the repository
 
-Open a terminal and run:
+Open the terminal at the directory that you want it installed and run:
 
 ```bash
 git clone https://github.com/nshiam/Shamrock.git
@@ -29,57 +23,48 @@ cd Shamrock
 
 ### 2. Set up the environment
 
-Create the Conda environment using the provided environment file:
+Create the conda environment using the provided environment file depending on your system.
+(Note: Shamrock is still in developer mode, so this step might take a bit longer)
+
+For Linux: 
 
 ```bash
-conda env create -f shamrock_environment.yml
+conda env create -f shamrock_environment_linux.yml
 ```
 
-Activate the environment:
+For macOS: 
 
 ```bash
-conda activate shamrock_environment
+conda env create -f shamrock_environment_mac.yml
 ```
 
-*Note: Replace `shamrock_environment` with the actual environment name specified in `shamrock_environment.yml` if different.*
+Both these commands will make an environment called shamrock. Activate the environment:
+
+```bash
+conda activate shamrock
+```
+
 
 ### 3. Verify installation & Example Usage
 
-
-
-The following is an example of how to use the algorithm on the :
+To verify the installation and that everything is working as expected, I would suggest to test the code on some example light-curves.
+The directory DES_EXAMPLE_LC contains some HEAD and PHOT files from DES, and I will show how to run it on these DES light curves. 
+In the terminal:
 
 ```bash
 # Ensure the Conda environment is activated
-conda activate shamrock_environment
+conda activate shamrock
 
-# Run the main script
-python main.py
+# Check all the available inputs
+python main.py -h
+
+# Run the script on the DES_EXAMPLE_LC for the first 20 SNIDs, using 2 cores.
+python main.py --FILE_PATH ./DES_EXAMPLE_LC/ --ZERO_POINT 27.5 --NCORES 2 --START 0 --END 20
+
 ```
-
-*Replace `main.py` with the appropriate entry-point script for your project.*
-
-### Example Python Usage
-
-In the terminal:
-
-```python
-# Import the relevant functions or modules
-from shamrock import *
-
-# Example function call
-# result = example_function()
-```
-
-
-## Requirements
-
-
-## Contributing
-
+Once this is done, go to ./DES_EXAMPLE_LC/ where the csv file with the photo-z estimates is located.
 
 
 ## Contact
-
-For questions or further information, please contact:
+Shamrock is still under development. For questions or further information, please contact:
 N.Shiamtanis | N.Shiamtanis@soton.ac.uk
