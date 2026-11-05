@@ -23,16 +23,15 @@ cd Shamrock
 
 ### 2. Set up the environment
 
-Create the conda environment using the provided environment file depending on your system.
+Create the conda environment using the provided environment file.
 (Note: Shamrock is still in developer mode, so this step might take a bit longer)
 
-For macOS: 
 
 ```bash
 conda env create -f shamrock_environment.yml
 ```
 
-Both these commands will make an environment called shamrock. Activate the environment:
+This command will make an environment called shamrock. Activate the environment:
 
 ```bash
 conda activate shamrock
